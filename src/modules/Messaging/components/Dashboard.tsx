@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useContext, useState } from 'react';
-import { useSigner } from 'wagmi';
+import { useProvider, useSigner } from 'wagmi';
 import Steps from '../../../components/Steps';
 import StarterKitContext from '../../../context/starterKit';
 import { useChainId } from '../../../hooks/useChainId';
@@ -13,6 +13,9 @@ import { ChatMessageStatus, XmtpChatMessage } from '../utils/types';
 import CardHeader from './CardHeader';
 import MessageComposer from './MessageComposer';
 import MessageList from './MessageList';
+import { createService } from '../../../contracts/createService';
+import useAllowedTokens from '../../../hooks/useAllowedTokens';
+import { extractCreateServiceDetails } from '../../../utils/message';
 
 function Dashboard() {
   const chainId = useChainId();
@@ -20,6 +23,7 @@ function Dashboard() {
   const { data: signer } = useSigner({
     chainId,
   });
+  const provider = useProvider({ chainId });
   const { providerState, setProviderState } = useContext(XmtpContext);
   const [messageContent, setMessageContent] = useState<string>('');
   const router = useRouter();
@@ -27,6 +31,7 @@ function Dashboard() {
   const selectedConversationPeerAddress = address as string;
   const [sendingPending, setSendingPending] = useState(false);
   const [messageSendingErrorMsg, setMessageSendingErrorMsg] = useState('');
+  const allowedTokenList = useAllowedTokens();
 
   const { sendMessage } = useSendMessage(
     (selectedConversationPeerAddress as string) ? selectedConversationPeerAddress : '',
@@ -44,64 +49,29 @@ function Dashboard() {
   };
 
   const sendNewMessage = async () => {
-    if (account?.address && messageContent && providerState && setProviderState) {
-      setSendingPending(true);
-      const sentMessage: XmtpChatMessage = {
-        from: account.address,
-        to: selectedConversationPeerAddress,
-        messageContent,
-        timestamp: new Date(),
-        status: ChatMessageStatus.PENDING,
-      };
-      const cloneState = { ...providerState };
-      const allMessages = cloneState.conversationMessages;
-      let messages = cloneState.conversationMessages.get(selectedConversationPeerAddress);
-      if (messages) {
-        // If Last message in error, remove it & try to resend
-        if (messageSendingErrorMsg) {
-          messages.pop();
-          setMessageSendingErrorMsg('');
-        }
-        messages.push(sentMessage);
-        allMessages.set(selectedConversationPeerAddress, messages);
-      } else {
-        // If no messages, create new ChatMessage array
-        allMessages.set(selectedConversationPeerAddress, [sentMessage]);
+    console.log('sendNewMessage')
+
+    if (signer && user && account?.address && messageContent && providerState && setProviderState) {
+
+      let customMessageContent = messageContent;
+      // /create-gig Solidity dev nft project for 0.1 MATIC
+      if(messageContent.includes('/create-gig')){
+        const values = extractCreateServiceDetails(messageContent);
+        console.log('sendNewMessage', {allowedTokenList, values})
+        const newId = await createService(chainId, signer, provider, user, values, allowedTokenList);
+        customMessageContent = customMessageContent + ' | id:' + newId;
       }
 
       try {
-        //Send message
-        setProviderState({
-          ...providerState,
-          conversationMessages: allMessages,
-        });
-        const response = await sendMessage(messageContent);
-        // Update message status & timestamp
-        sentMessage.status = ChatMessageStatus.SENT;
-        sentMessage.timestamp = response.sent;
-
-        messages = allMessages.get(selectedConversationPeerAddress);
-        messages?.pop();
-        messages?.push(sentMessage);
+        const response = await sendMessage(customMessageContent);
         setMessageContent('');
       } catch (error) {
         setSendingPending(false);
         setMessageSendingErrorMsg(
           'An error occurred while sending the message. Please try again later.',
         );
-        // If message in error, update last message' status to ERROR
-        sentMessage.status = ChatMessageStatus.ERROR;
-        messages?.pop();
-        messages?.push(sentMessage);
         console.error(error);
       } finally {
-        if (messages) {
-          allMessages.set(selectedConversationPeerAddress, messages);
-        }
-        setProviderState({
-          ...providerState,
-          conversationMessages: allMessages,
-        });
         setSendingPending(false);
       }
     }

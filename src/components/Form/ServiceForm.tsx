@@ -19,7 +19,7 @@ import { delegateCreateService } from '../request';
 import { useChainId } from '../../hooks/useChainId';
 import { useConfig } from '../../hooks/useConfig';
 
-interface IFormValues {
+export interface IFormValues {
   title: string;
   about: string;
   keywords: string;

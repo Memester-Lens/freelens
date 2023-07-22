@@ -6,15 +6,30 @@ import { formatDateDivider } from '../../../utils/dates';
 import { formatDateTime } from '../utils/messaging';
 import { ChatMessageStatus, XmtpChatMessage } from '../utils/types';
 import { ArrowUpRightIcon } from '@heroicons/react/24/outline';
+import { extractCreateServiceDetails, extractID } from '../../../utils/message';
+import GigMessageCard from './GigMessageCard';
+import ProposalMessageCard from './ProposalMessageCard';
+
 
 interface IMessageCardProps {
   message: XmtpChatMessage;
   dateHasChanged: boolean;
 }
 
-const formatMessage = (message: string) => {
-  if (message.includes('/pattern?')) {
-    return <p>Formated message</p>;
+
+
+const formatMessage = (message: string, isSender: boolean) => {
+  console.log('Raphiraphraph    ' + message);
+  const id = extractID(message);
+
+  console.log('Raphiraphraph    ' + id);
+
+  if (id && message.includes('/create-gig')) {
+    return <GigMessageCard message={message} isSender={isSender} id={id} />;
+  }
+  if (message.includes('/create-proposal')) {
+    console.log("proposal creation detected");
+    return <ProposalMessageCard message={message} isSender={isSender} id={id} />;
   }
   return message;
 };
@@ -24,7 +39,7 @@ const MessageCard = ({ message, dateHasChanged }: IMessageCardProps) => {
 
   const isSender = message.from.toLowerCase() === account?.address?.toLowerCase();
 
-  const messageContent = formatMessage(message.messageContent);
+  const messageContent = formatMessage(message.messageContent, isSender);
 
   return (
     <>
